@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<button id="btn-download-mod" class="btn btn-zip">🎁 MODU ZIP OLARAK İNDİR</button>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
@@ -46,6 +45,10 @@
         }
         .btn-add { background: #ff9f43; color: #0f0f13; width: 100%; margin-bottom: 15px; }
         .btn-add:hover { background: #ffb366; }
+        
+        /* YEŞİL ZIP BUTONUNUN STİLİ */
+        .btn-zip { background: #10ac84; color: white; width: 100%; margin-top: auto; margin-bottom: 10px; }
+        .btn-zip:hover { background: #1dd1a1; }
         
         .project-card { 
             background: #1e1e24; 
@@ -184,6 +187,8 @@
         <div class="section-title">Navigasyon</div>
         <div class="nav-tab active" id="tab-audio-mode" onclick="switchMode('audio')">🔊 Ses Dosyaları</div>
         <div class="nav-tab" id="tab-text-mode" onclick="switchMode('text')">📝 Ekran & Telsiz Metinleri</div>
+
+        <button id="btn-download-mod" class="btn btn-zip">🎁 MODU ZIP OLARAK İNDİR</button>
 
         <div class="section-title">Projeleriniz</div>
         <div id="project-list"></div>
