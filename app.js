@@ -4,7 +4,7 @@ let filteredFiles = [];
 let renderedCount = 0;
 const BATCH_SIZE = 50;
 
-// 1. Klasör Seçme
+// 1. Klasör ve Dosya Tarama
 document.getElementById('folder-select').onchange = (e) => {
     allFiles = Array.from(e.target.files)
         .filter(f => f.name.toLowerCase().endsWith('.wav'))
@@ -12,7 +12,7 @@ document.getElementById('folder-select').onchange = (e) => {
     renderList(true);
 };
 
-// 2. Render ve Arama (Lazy Loading)
+// 2. Arama ve Liste Gösterimi (Lazy Loading)
 function renderList(reset = false) {
     const container = document.getElementById('sidebar-list-container');
     const search = document.getElementById('search-box').value.toLowerCase();
@@ -37,16 +37,17 @@ function renderList(reset = false) {
     document.getElementById('btn-load-more').style.display = (renderedCount < filteredFiles.length) ? 'block' : 'none';
 }
 
-// 3. Dosya Seçme ve Kayıt
+// 3. Dosya Seçimi
 let selectedNode = null;
-let mediaRecorder;
-let audioChunks = [];
-
 function selectFile(node) {
     selectedNode = node;
     document.getElementById('current-file').innerText = node.relativePath;
     document.getElementById('btn-start').disabled = false;
 }
+
+// 4. Ses Kaydı
+let mediaRecorder;
+let audioChunks = [];
 
 document.getElementById('btn-start').onclick = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -70,7 +71,7 @@ document.getElementById('btn-stop').onclick = () => {
     document.getElementById('btn-stop').style.display = 'none';
 };
 
-// 4. ZIP İşlemleri
+// 5. ZIP İçe ve Dışa Aktarma
 document.getElementById('btn-download-mod').onclick = async () => {
     if(Object.keys(recordedBlobs).length === 0) return alert("Henüz bir ses kaydetmedin!");
     const zip = new JSZip();
@@ -89,23 +90,3 @@ document.getElementById('import-zip').onchange = async (e) => {
     const file = e.target.files[0];
     if(!file) return;
     const zip = await JSZip.loadAsync(file);
-    for (let path in zip.files) {
-        if (!zip.files[path].dir) {
-            recordedBlobs[path] = await zip.files[path].async("blob");
-        }
-    }
-    renderList(true);
-    alert("ZIP içeriği yüklendi!");
-};
-
-// 5. Arama ve Kontroller
-document.getElementById('search-box').oninput = () => renderList(true);
-document.getElementById('btn-load-more').onclick = () => renderList(false);
-
-// 6. GÜVENLİK: Çıkış Uyarısı
-window.addEventListener('beforeunload', function (e) {
-    if (Object.keys(recordedBlobs).length > 0) {
-        e.preventDefault();
-        e.returnValue = ''; 
-    }
-});
