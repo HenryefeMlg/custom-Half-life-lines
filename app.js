@@ -7,7 +7,7 @@ let isLazyLoad = true;
 let loadedTextCount = 0;
 const TEXT_PAGE_SIZE = 15;
 let virtualFiles = [];
-let globalStream = null; // Mikrofon donanım bağlantısı
+let globalStream = null;
 
 const hlTitlesData = [
     { key: "HLS_TITLE", val: "HALF-LIFE" },
@@ -156,10 +156,9 @@ document.getElementById('btn-play-custom').onclick = () => {
     }
 };
 
-// 🎙️ YENİLENMİŞ GARANTİLİ SES KAYDETME SİSTEMİ
+// 🎙️ YENİ ULTRA AKICI SES KAYDETME SİSTEMİ
 document.getElementById('btn-start').onclick = async () => {
     try {
-        // Her kayıtta eski mikrofon bağlantı kalıntılarını tamamen temizliyoruz
         if (globalStream) {
             globalStream.getTracks().forEach(track => track.stop());
         }
@@ -176,7 +175,9 @@ document.getElementById('btn-start').onclick = async () => {
         
         mediaRecorder.onstop = () => {
             if (audioChunks.length === 0) {
-                document.getElementById('status').innerText = "Hata: Ses verisi alınamadı, tekrar deneyin.";
+                document.getElementById('status').innerText = "Hata: Ses verisi boş döndü, tekrar deneyin.";
+                document.getElementById('btn-start').style.display = 'inline-block';
+                document.getElementById('btn-stop').style.display = 'none';
                 return;
             }
             
@@ -188,43 +189,38 @@ document.getElementById('btn-start').onclick = async () => {
                 const currentProj = projects.find(p => p.id === activeProjectId);
                 if (!currentProj.savedFiles) currentProj.savedFiles = {};
                 
-                // Seçilen sesin üzerine net olarak yazar (Eski veriyi sıfırlar)
                 currentProj.savedFiles[selectedAudioFile.relativePath] = base64String;
                 saveToStorage();
                 
                 document.getElementById('status').innerText = "Kayıt Başarıyla Yazıldı!";
                 document.getElementById('btn-play-custom').style.display = 'inline-block';
                 
-                // Butonları eski düzenine döndür
                 document.getElementById('btn-start').style.display = 'inline-block';
                 document.getElementById('btn-stop').style.display = 'none';
                 renderAudioTree();
             }
         };
 
-        mediaRecorder.start(100); // 100ms'lik paketler halinde veriyi anlık besle (Takılmayı önler)
+        mediaRecorder.start();
         document.getElementById('btn-start').style.display = 'none';
         document.getElementById('btn-stop').style.display = 'inline-block';
         document.getElementById('status').innerText = "🎙️ Kayıt yapılıyor... Konuşun.";
     } catch (err) {
-        alert("Mikrofon başlatılamadı. İzinleri kontrol edin: " + err);
+        alert("Mikrofon başlatılamadı: " + err);
     }
 };
 
-// 🛑 TAM DONANIM KİLİTLEME VE DURDURMA MOTORU
+// 🛑 ANINDA DURDURMA VE KAYDETMEYE ZORLAMA MOTORU
 document.getElementById('btn-stop').onclick = () => {
-    document.getElementById('status').innerText = "Kayıt işleniyor ve donanım kapatılıyor...";
+    document.getElementById('status').innerText = "Kayıt tamamlanıyor...";
 
-    // 1. Önce kayıt motorunu durdur (onstop tetiklenecek)
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.requestData(); // Tarayıcıyı elindeki tüm veriyi anında boşaltmaya zorla (Takılmayı Önler!)
         mediaRecorder.stop();
     }
     
-    // 2. Mikrofon donanımının hattını tamamen kes (Işığı söndürür, kanalı serbest bırakır)
     if (globalStream) {
-        globalStream.getTracks().forEach(track => {
-            track.stop();
-        });
+        globalStream.getTracks().forEach(track => track.stop());
         globalStream = null;
     }
 };
