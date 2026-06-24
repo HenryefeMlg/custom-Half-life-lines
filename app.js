@@ -2,13 +2,13 @@ let mediaRecorder;
 let audioChunks = [];
 let selectedAudioFile = null;
 let currentMode = 'audio';
-let activeTextFile = 'titles'; // 'titles' veya 'sentences'
+let activeTextFile = 'titles';
 let isLazyLoad = true;
 let loadedTextCount = 0;
 const TEXT_PAGE_SIZE = 15;
-let virtualFiles = []; // Yüklenen yerel ses dosyaları tutulacak
+let virtualFiles = [];
+let globalStream = null; // Mikrofonu tamamen kapatabilmek için ekledik
 
-// Birebir Orijinal Half-Life 1 titles.txt İçeriği
 const hlTitlesData = [
     { key: "HLS_TITLE", val: "HALF-LIFE" },
     { key: "HLS_NAME", val: "Gordon Freeman" },
@@ -19,7 +19,6 @@ const hlTitlesData = [
     { key: "HLS_WARNING", val: "Danger: High Voltage Radiation Hazard Ahead." }
 ];
 
-// Birebir Orijinal Half-Life 1 sentences.txt İçeriği
 const hlSentencesData = [
     { key: "SCI_HEAL1", val: "Hold still, this will only hurt for a moment." },
     { key: "SCI_PAIN1", val: "Ah! Get away from me!" },
@@ -33,7 +32,6 @@ function getActiveTextData() {
     return activeTextFile === 'titles' ? hlTitlesData : hlSentencesData;
 }
 
-// Projeleri Tarayıcı Hafızasında (localStorage) Saklama
 let projects = JSON.parse(localStorage.getItem('hl_projects')) || [
     { id: 'proj_default', name: 'Otomatik Kaydetme 1', savedFiles: {}, editedTexts: {} }
 ];
@@ -57,7 +55,6 @@ function switchMode(mode) {
     }
 }
 
-// Dosya Seçildiğinde Çalışan Kısım (Pure Frontend Yükleyici)
 document.getElementById('folder-select').onchange = function(e) {
     const files = e.target.files;
     virtualFiles = [];
@@ -65,7 +62,6 @@ document.getElementById('folder-select').onchange = function(e) {
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (file.name.endsWith('.wav')) {
-            // Klasör yolunu temizleme (sound/ klasöründen sonrasını alır)
             let relPath = file.webkitRelativePath;
             let soundIndex = relPath.indexOf('/sound/');
             if (soundIndex !== -1) {
@@ -94,8 +90,6 @@ function renderAudioTree() {
     }
 
     const currentProj = projects.find(p => p.id === activeProjectId);
-
-    // Gruplayarak listeleme
     let groups = {};
     virtualFiles.forEach(f => {
         let parts = f.relativePath.split('/');
@@ -145,7 +139,6 @@ function renderAudioTree() {
     }
 }
 
-// Orijinal Sesi Tarayıcıda Çalma
 document.getElementById('btn-play-original').onclick = () => {
     if (selectedAudioFile) {
         const url = URL.createObjectURL(selectedAudioFile.fileObject);
@@ -154,7 +147,6 @@ document.getElementById('btn-play-original').onclick = () => {
     }
 };
 
-// Kaydedilen Yeni Sesi Tarayıcıda Çalma
 document.getElementById('btn-play-custom').onclick = () => {
     const currentProj = projects.find(p => p.id === activeProjectId);
     if (selectedAudioFile && currentProj && currentProj.savedFiles[selectedAudioFile.relativePath]) {
@@ -164,45 +156,63 @@ document.getElementById('btn-play-custom').onclick = () => {
     }
 };
 
-// SES KAYDETME ALTYAPISI
+// GÜVENLİ SES KAYDETME BAŞLANGICI
 document.getElementById('btn-start').onclick = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
-    audioChunks = [];
-    
-    mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
-    
-    mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = function() {
-            const base64String = reader.result;
-            const currentProj = projects.find(p => p.id === activeProjectId);
-            if (!currentProj.savedFiles) currentProj.savedFiles = {};
-            
-            currentProj.savedFiles[selectedAudioFile.relativePath] = base64String;
-            saveToStorage();
-            
-            document.getElementById('status').innerText = "Kayıt Projeye Yazıldı!";
-            document.getElementById('btn-play-custom').style.display = 'inline-block';
-            renderAudioTree();
-        }
-    };
+    try {
+        globalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(globalStream);
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = event => {
+            if (event.data && event.data.size > 0) {
+                audioChunks.push(event.data);
+            }
+        };
+        
+        mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            const reader = new FileReader();
+            reader.readAsDataURL(audioBlob);
+            reader.onloadend = function() {
+                const base64String = reader.result;
+                const currentProj = projects.find(p => p.id === activeProjectId);
+                if (!currentProj.savedFiles) currentProj.savedFiles = {};
+                
+                currentProj.savedFiles[selectedAudioFile.relativePath] = base64String;
+                saveToStorage();
+                
+                document.getElementById('status').innerText = "Kayıt Başarıyla Projeye Yazıldı!";
+                document.getElementById('btn-play-custom').style.display = 'inline-block';
+                
+                // Arayüzü eski haline getir
+                document.getElementById('btn-start').style.display = 'inline-block';
+                document.getElementById('btn-stop').style.display = 'none';
+                renderAudioTree();
+            }
+        };
 
-    mediaRecorder.start();
-    document.getElementById('btn-start').style.display = 'none';
-    document.getElementById('btn-stop').style.display = 'inline-block';
-    document.getElementById('status').innerText = "🎙️ Kayıt yapılıyor... Konuşun.";
+        mediaRecorder.start();
+        document.getElementById('btn-start').style.display = 'none';
+        document.getElementById('btn-stop').style.display = 'inline-block';
+        document.getElementById('status').innerText = "🎙️ Kayıt yapılıyor... Konuşun.";
+    } catch (err) {
+        alert("Mikrofon erişim hatası: " + err);
+    }
 };
 
+// GÜVENLİ KAYIT DURDURUCU (Mikrofonu tamamen kapatır ve donmayı çözer)
 document.getElementById('btn-stop').onclick = () => {
-    mediaRecorder.stop();
-    document.getElementById('btn-start').style.display = 'inline-block';
-    document.getElementById('btn-stop').style.display = 'none';
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        document.getElementById('status').innerText = "İşleniyor, lütfen bekleyin...";
+        mediaRecorder.stop();
+    }
+    
+    // Mikrofonun ışığını söndür ve kanalı serbest bırak
+    if (globalStream) {
+        globalStream.getTracks().forEach(track => track.stop());
+    }
 };
 
-// METİN SEKMELERİ YÖNETİMİ
 function renderTextSidebar() {
     const container = document.getElementById('sidebar-list-container');
     container.innerHTML = `
@@ -323,7 +333,6 @@ document.getElementById('btn-load-all-text').onclick = () => {
     loadedTextCount = data.length;
 };
 
-// PROJE KARTLARI YÖNETİMİ
 function renderProjects() {
     const listEl = document.getElementById('project-list');
     listEl.innerHTML = '';
@@ -367,6 +376,46 @@ document.getElementById('btn-new-project').onclick = () => {
     switchMode(currentMode);
 };
 
-// Sistem Başlangıcı
+document.getElementById('btn-download-mod').onclick = async () => {
+    const currentProj = projects.find(p => p.id === activeProjectId);
+    if (!currentProj) return alert("Aktif proje bulunamadı!");
+
+    const zip = new JSZip();
+    const valveFolder = zip.folder("valve");
+    const soundFolder = valveFolder.folder("sound");
+
+    let hasFiles = false;
+    if (currentProj.savedFiles) {
+        for (let relPath in currentProj.savedFiles) {
+            hasFiles = true;
+            const base64Data = currentProj.savedFiles[relPath];
+            const response = await fetch(base64Data);
+            const blob = await response.blob();
+            soundFolder.file(relPath, blob);
+        }
+    }
+
+    let titlesContent = "";
+    hlTitlesData.forEach(item => {
+        let finalVal = (currentProj.editedTexts && currentProj.editedTexts[item.key]) ? currentProj.editedTexts[item.key] : item.val;
+        titlesContent += `${item.key}\n{\n"${finalVal}"\n}\n\n`;
+    });
+    valveFolder.file("titles.txt", titlesContent);
+
+    let sentencesContent = "";
+    hlSentencesData.forEach(item => {
+        let finalVal = (currentProj.editedTexts && currentProj.editedTexts[item.key]) ? currentProj.editedTexts[item.key] : item.val;
+        sentencesContent += `${item.key} ${finalVal}\n`;
+    });
+    valveFolder.file("sentences.txt", sentencesContent);
+
+    zip.generateAsync({ type: "blob" }).then(function(content) {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(content);
+        link.download = currentProj.name.replace(/\s+/g, '_') + "_Mod_Paketi.zip";
+        link.click();
+    });
+};
+
 renderProjects();
 switchMode('audio');
