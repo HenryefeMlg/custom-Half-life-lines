@@ -1,4 +1,4 @@
-let mediaRecorder;
+let mediaRecorder = null;
 let audioChunks = [];
 let selectedAudioFile = null;
 let currentMode = 'audio';
@@ -7,7 +7,7 @@ let isLazyLoad = true;
 let loadedTextCount = 0;
 const TEXT_PAGE_SIZE = 15;
 let virtualFiles = [];
-let globalStream = null; // Mikrofonu tamamen kapatabilmek için ekledik
+let globalStream = null; // Mikrofon donanım bağlantısı
 
 const hlTitlesData = [
     { key: "HLS_TITLE", val: "HALF-LIFE" },
@@ -156,12 +156,17 @@ document.getElementById('btn-play-custom').onclick = () => {
     }
 };
 
-// GÜVENLİ SES KAYDETME BAŞLANGICI
+// 🎙️ YENİLENMİŞ GARANTİLİ SES KAYDETME SİSTEMİ
 document.getElementById('btn-start').onclick = async () => {
     try {
+        // Her kayıtta eski mikrofon bağlantı kalıntılarını tamamen temizliyoruz
+        if (globalStream) {
+            globalStream.getTracks().forEach(track => track.stop());
+        }
+        
+        audioChunks = [];
         globalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(globalStream);
-        audioChunks = [];
         
         mediaRecorder.ondataavailable = event => {
             if (event.data && event.data.size > 0) {
@@ -170,6 +175,11 @@ document.getElementById('btn-start').onclick = async () => {
         };
         
         mediaRecorder.onstop = () => {
+            if (audioChunks.length === 0) {
+                document.getElementById('status').innerText = "Hata: Ses verisi alınamadı, tekrar deneyin.";
+                return;
+            }
+            
             const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
             const reader = new FileReader();
             reader.readAsDataURL(audioBlob);
@@ -178,38 +188,44 @@ document.getElementById('btn-start').onclick = async () => {
                 const currentProj = projects.find(p => p.id === activeProjectId);
                 if (!currentProj.savedFiles) currentProj.savedFiles = {};
                 
+                // Seçilen sesin üzerine net olarak yazar (Eski veriyi sıfırlar)
                 currentProj.savedFiles[selectedAudioFile.relativePath] = base64String;
                 saveToStorage();
                 
-                document.getElementById('status').innerText = "Kayıt Başarıyla Projeye Yazıldı!";
+                document.getElementById('status').innerText = "Kayıt Başarıyla Yazıldı!";
                 document.getElementById('btn-play-custom').style.display = 'inline-block';
                 
-                // Arayüzü eski haline getir
+                // Butonları eski düzenine döndür
                 document.getElementById('btn-start').style.display = 'inline-block';
                 document.getElementById('btn-stop').style.display = 'none';
                 renderAudioTree();
             }
         };
 
-        mediaRecorder.start();
+        mediaRecorder.start(100); // 100ms'lik paketler halinde veriyi anlık besle (Takılmayı önler)
         document.getElementById('btn-start').style.display = 'none';
         document.getElementById('btn-stop').style.display = 'inline-block';
         document.getElementById('status').innerText = "🎙️ Kayıt yapılıyor... Konuşun.";
     } catch (err) {
-        alert("Mikrofon erişim hatası: " + err);
+        alert("Mikrofon başlatılamadı. İzinleri kontrol edin: " + err);
     }
 };
 
-// GÜVENLİ KAYIT DURDURUCU (Mikrofonu tamamen kapatır ve donmayı çözer)
+// 🛑 TAM DONANIM KİLİTLEME VE DURDURMA MOTORU
 document.getElementById('btn-stop').onclick = () => {
+    document.getElementById('status').innerText = "Kayıt işleniyor ve donanım kapatılıyor...";
+
+    // 1. Önce kayıt motorunu durdur (onstop tetiklenecek)
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        document.getElementById('status').innerText = "İşleniyor, lütfen bekleyin...";
         mediaRecorder.stop();
     }
     
-    // Mikrofonun ışığını söndür ve kanalı serbest bırak
+    // 2. Mikrofon donanımının hattını tamamen kes (Işığı söndürür, kanalı serbest bırakır)
     if (globalStream) {
-        globalStream.getTracks().forEach(track => track.stop());
+        globalStream.getTracks().forEach(track => {
+            track.stop();
+        });
+        globalStream = null;
     }
 };
 
@@ -384,10 +400,8 @@ document.getElementById('btn-download-mod').onclick = async () => {
     const valveFolder = zip.folder("valve");
     const soundFolder = valveFolder.folder("sound");
 
-    let hasFiles = false;
     if (currentProj.savedFiles) {
         for (let relPath in currentProj.savedFiles) {
-            hasFiles = true;
             const base64Data = currentProj.savedFiles[relPath];
             const response = await fetch(base64Data);
             const blob = await response.blob();
