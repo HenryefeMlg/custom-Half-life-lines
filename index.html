@@ -2,96 +2,88 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Half-Life Gelişmiş Ses Modu Aracı</title>
+    <title>Half-Life Ses Mod İstasyonu</title>
     <style>
-        :root { --bg: #0d0d0d; --panel: #1a1a1a; --primary: #ff6600; --primary-hover: #e65c00; --text: #f0f0f0; --success: #28a745; --danger: #dc3545; }
+        :root { --bg: #0a0a0a; --panel: #141414; --orange: #ff7700; --orange-hover: #cc5f00; --text: #ededed; --green: #10ac84; --red: #eb4d4b; }
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; margin: 0; overflow: hidden; }
         
-        #sidebar { width: 380px; background: var(--panel); display: flex; flex-direction: column; border-right: 1px solid #333; }
-        .sidebar-header { padding: 15px; border-bottom: 1px solid #333; }
-        .btn { padding: 12px; cursor: pointer; border: none; background: #333; color: white; margin-bottom: 8px; border-radius: 4px; font-weight: bold; width: 100%; transition: 0.2s; box-sizing: border-box; }
-        .btn:hover { opacity: 0.9; }
-        .btn-orange { background: var(--primary); color: #000; }
-        .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
-        .btn-success { background: var(--success); }
-        .btn-danger { background: var(--danger); }
+        #sidebar { width: 380px; background: var(--panel); display: flex; flex-direction: column; border-right: 1px solid #282828; z-index: 2;}
+        .top-nav { padding: 15px; background: #111; border-bottom: 1px solid #282828; }
         
-        #search { width: 100%; padding: 10px; margin-top: 10px; background: #222; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
+        .btn { padding: 11px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; width: 100%; margin-bottom: 8px; transition: 0.15s; font-size: 13px; text-align: center; }
+        .btn:hover { filter: brightness(1.1); }
+        .btn-orange { background: var(--orange); color: #000; }
+        .btn-dark { background: #222; color: #ccc; border: 1px solid #333; }
+        .btn-reset { background: #3a1515; color: #ff9494; border: 1px solid #572222; }
+        
+        #search { width: 100%; padding: 10px; background: #080808; border: 1px solid #333; color: white; border-radius: 4px; box-sizing: border-box; margin-top: 5px;}
         
         #list { flex: 1; overflow-y: auto; padding: 10px; }
-        .file-item { padding: 12px; border-bottom: 1px solid #2a2a2a; cursor: pointer; font-size: 13px; display: flex; flex-direction: column; gap: 5px; }
-        .file-item:hover { background: #252525; border-left: 3px solid var(--primary); }
-        .status-badge { font-size: 10px; padding: 3px 6px; border-radius: 3px; font-weight: bold; width: max-content; }
-        .badge-zip { background: #333; color: var(--primary); border: 1px solid var(--primary); }
-        .badge-new { background: var(--success); color: #fff; }
+        .file-item { padding: 10px; border-bottom: 1px solid #222; cursor: pointer; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+        .file-item:hover { background: #1f1a17; border-left: 3px solid var(--orange); }
         
-        #main { flex: 1; padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; overflow-y: auto; }
-        .panel-box { background: var(--panel); padding: 25px; border-radius: 8px; width: 100%; max-width: 600px; border: 1px solid #333; text-align: center; margin-bottom: 20px; }
+        .badge { font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: bold; width: max-content; }
+        .b-zip { background: #2b1f14; color: var(--orange); border: 1px solid #54371c; }
+        .b-new { background: #133b2b; color: #2ecc71; border: 1px solid #1e6b4c; }
+
+        #main { flex: 1; padding: 30px; display: flex; flex-direction: column; align-items: center; overflow-y: auto; }
+        .box { background: var(--panel); padding: 22px; border-radius: 6px; width: 100%; max-width: 650px; border: 1px solid #282828; margin-bottom: 18px; text-align: center; }
         
-        .audio-section { display: flex; justify-content: space-between; gap: 20px; width: 100%; margin-top: 15px; }
-        .audio-box { flex: 1; text-align: center; background: #222; padding: 15px; border-radius: 6px; }
-        audio { width: 100%; margin-top: 10px; height: 35px; outline: none; }
-        
-        .controls-row { display: flex; gap: 10px; margin: 20px 0; justify-content: center; width: 100%; }
-        select { padding: 10px; background: #222; color: white; border: 1px solid #444; border-radius: 4px; }
-        
-        #record-btn { font-size: 18px; padding: 20px; border-radius: 50px; width: 100%; max-width: 300px; user-select: none; }
+        .players-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; text-align: left; }
+        .p-card { background: #0d0d0d; padding: 12px; border-radius: 6px; border: 1px solid #222; }
+        .p-card.active-sound { border-color: var(--orange); }
+        audio { width: 100%; height: 32px; margin-top: 8px; }
+
+        #record-btn { font-size: 16px; padding: 22px; border-radius: 8px; width: 100%; max-width: 320px; font-weight: 900; letter-spacing: 1px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .mode-select { width: 100%; max-width: 320px; padding: 10px; background: #080808; color: var(--orange); border: 1px solid #333; border-radius: 4px; margin-bottom: 15px; font-weight: bold;}
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <div class="sidebar-header">
+    <div class="top-nav">
         <button onclick="document.getElementById('f-input').click()" class="btn btn-orange">📁 1. Orijinal Ses Klasörünü Seç</button>
-        <button onclick="document.getElementById('z-input').click()" class="btn btn-outline">📂 2. Eski ZIP'i Yükle (Devam Et)</button>
-        <button onclick="startNewProject()" class="btn" style="background:#555;">🔄 Yeni Proje Başlat (Sıfırla)</button>
-        <input type="text" id="search" placeholder="🔎 Dosya ara (örn: gman)...">
+        <button onclick="document.getElementById('z-input').click()" class="btn btn-dark">📂 2. Eski ZIP'i Yükle (Devam Et)</button>
+        <button onclick="triggerReset()" class="btn btn-reset">🔄 Yeni Proje Başlat (Sıfırla)</button>
+        <input type="text" id="search" placeholder="🔎 Dosya ara...">
         <input type="file" id="f-input" webkitdirectory directory multiple style="display:none">
         <input type="file" id="z-input" accept=".zip" style="display:none">
     </div>
     <div id="list"></div>
-    <button id="btn-load-more" class="btn" style="display:none; margin: 10px; width: 95%;">Daha Fazla Göster...</button>
+    <button id="btn-load-more" class="btn btn-dark" style="display:none; margin: 10px; width: 94%;">Daha Fazla Göster...</button>
 </div>
 
 <div id="main">
-    <div class="panel-box">
-        <h2 id="fname" style="color: var(--primary); margin: 0 0 10px 0; word-break: break-all;">Lütfen Yandan Dosya Seçin</h2>
-        <div id="fpath" style="color: #888; font-size: 12px; margin-bottom: 20px;">Orjinal klasörü yükleyip bir dosyaya tıklayın.</div>
+    <div class="box">
+        <h2 id="fname" style="color: var(--orange); margin: 0 0 5px 0;">Dosya Seçilmedi</h2>
+        <small id="fpath" style="color: #666;"></small>
         
-        <div class="audio-section" id="audio-players" style="display:none;">
-            <div class="audio-box">
-                <span style="color: #aaa; font-size: 12px;">Orijinal Ses</span>
-                <audio id="audio-original" controls></audio>
+        <div class="players-grid" id="player-container" style="display:none;">
+            <div class="p-card">
+                <span style="font-size:11px; color:#888;">ORİJİNAL SES (HALF-LIFE)</span>
+                <audio id="p-orig" controls></audio>
             </div>
-            <div class="audio-box" style="border: 1px solid var(--primary);">
-                <span style="color: var(--primary); font-size: 12px;">Senin Kaydın / ZIP'teki Ses</span>
-                <audio id="audio-recorded" controls></audio>
+            <div class="p-card active-sound" id="rec-card">
+                <span style="font-size:11px; color:var(--orange); font-weight:bold;">KAYDEDİLEN / ZIP SESİ</span>
+                <audio id="p-rec" controls></audio>
             </div>
         </div>
     </div>
 
-    <div class="panel-box" id="recorder-ui" style="display:none;">
-        <div class="controls-row">
-            <select id="rec-mode">
-                <option value="toggle">Mod: Tıkla Başla / Tıkla Bitir</option>
-                <option value="hold">Mod: Basılı Tutarak Kaydet</option>
-            </select>
-            <select id="rec-delay">
-                <option value="0">Gecikme: Yok (0 sn)</option>
-                <option value="1">Gecikme: 1 Saniye</option>
-                <option value="2">Gecikme: 2 Saniye</option>
-                <option value="3">Gecikme: 3 Saniye</option>
-            </select>
-        </div>
-        
-        <button id="record-btn" class="btn btn-danger">🎙️ KAYDET</button>
-        <p id="rec-status" style="color:#aaa; font-size:12px; margin-top:10px;">Kaydetmek için butona basın.</p>
+    <div class="box" id="recorder-box" style="display:none;">
+        <select id="rec-mode" class="mode-select">
+            <option value="hold">Kayıt Modu: BASILI TUTARAK KAYDET</option>
+            <option value="toggle">Kayıt Modu: TIKLA BAŞLA / TIKLA BİTİR</option>
+        </select>
+        <br>
+        <button id="record-btn" class="btn" style="background:var(--red); color:white;">🎙️ KAYDA BAŞLA</button>
+        <div id="rec-hint" style="font-size:11px; color:#777; margin-top:10px;">Kaydetmek için butona basılı tutun.</div>
     </div>
 
-    <div class="panel-box" id="export-ui" style="display:none; border-color: var(--success);">
-        <h3 style="margin-top:0;">Dışa Aktar / İndir</h3>
-        <button onclick="downloadZip('merge')" class="btn btn-success">📦 1. Her Şeyi (Eski ZIP + Yeni Kayıtlar) İndir</button>
-        <button onclick="downloadZip('new')" class="btn btn-outline" style="color: var(--success); border-color: var(--success);">📄 2. SADECE Yeni Eklenenleri İndir</button>
+    <div class="box" id="export-box" style="display:none; border-color: var(--green);">
+        <h4 style="margin:0 0 12px 0; color:var(--green);">MOD PAKETİNİ HAZIRLA</h4>
+        <button onclick="exportMod('merge')" class="btn" style="background:var(--green); color:#000;">🎁 1. Tüm Sesleri Üzerine Yazıp İndir (Ana Mod ZIP)</button>
+        <button onclick="exportMod('new')" class="btn btn-dark" style="border-color:var(--green); color:var(--green);">📄 2. Sadece Yeni Kaydedilenleri İndir (Yama ZIP)</button>
     </div>
 </div>
 
