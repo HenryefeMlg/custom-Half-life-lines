@@ -2,49 +2,54 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Half-Life Mod Geliştirici Paneli</title>
+    <title>HL Mod Yapım İstasyonu</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #141419; color: #fff; display: flex; margin: 0; height: 100vh; overflow: hidden; }
-        #project-sidebar { width: 300px; background: #0f0f13; border-right: 1px solid #23232a; padding: 15px; display: flex; flex-direction: column; }
-        #file-sidebar { width: 350px; background: #18181f; border-right: 1px solid #23232a; display: flex; flex-direction: column; }
-        #main-area { flex: 1; background: #212129; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        body { font-family: 'Segoe UI', sans-serif; background: #141419; color: #fff; display: flex; margin: 0; height: 100vh; overflow: hidden; }
+        #project-section { width: 280px; background: #0f0f13; border-right: 1px solid #23232a; padding: 15px; display: flex; flex-direction: column; }
+        .sidebar { width: 350px; background: #18181f; display: flex; flex-direction: column; border-right: 1px solid #23232a; }
+        .main-area { flex: 1; padding: 30px; background: #212129; display: flex; flex-direction: column; }
         
-        .btn { padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-bottom: 10px; width: 100%; text-align: center; }
-        .sidebar-header { padding: 15px; border-bottom: 1px solid #23232a; }
+        .btn { padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 5px; width: 100%; }
+        .nav-tab { padding: 12px; cursor: pointer; border-bottom: 2px solid transparent; text-align: center; color: #8e8e93; }
+        .nav-tab.active { border-color: #ff9f43; color: #fff; }
         
+        #search-box { width: 100%; padding: 10px; background: #212129; border: 1px solid #3d3d4a; color: white; border-radius: 4px; margin-bottom: 10px; }
         .file-item { padding: 10px; background: #1e1e24; margin-bottom: 4px; border-radius: 4px; cursor: pointer; border-left: 4px solid #3d3d4a; }
-        .file-item.done { border-left-color: #10ac84; background: #23232a; }
-        
-        #search-box { width: 100%; padding: 10px; background: #212129; color: white; border: 1px solid #3d3d4a; border-radius: 4px; box-sizing: border-box; }
-        .recorder-btn { width: 200px; padding: 20px; font-size: 16px; border-radius: 50px; }
+        .file-item.done { border-left-color: #10ac84; }
     </style>
 </head>
 <body>
 
-<div id="project-sidebar">
-    <label for="folder-select" class="btn" style="background:#ff9f43; color:#000;">📁 Ses Klasörünü Seç</label>
+<div id="project-section">
+    <label for="folder-select" class="btn" style="background:#ff9f43;">📁 Klasör Seç</label>
     <input type="file" id="folder-select" webkitdirectory directory multiple style="display:none;">
-
-    <label for="import-zip" class="btn" style="background:#5f27cd; color:#fff;">📂 Eski Projeyi (ZIP) Yükle</label>
+    
+    <label for="import-zip" class="btn" style="background:#5f27cd; color:#fff;">📂 Proje Yükle (ZIP)</label>
     <input type="file" id="import-zip" accept=".zip" style="display:none;">
-
-    <hr style="width:100%; border:0; border-top:1px solid #23232a; margin: 20px 0;">
     
     <button id="btn-download-mod" class="btn" style="background:#10ac84; color:white; margin-top: auto;">🎁 MODU ZIP OLARAK İNDİR</button>
 </div>
 
-<div id="file-sidebar">
-    <div class="sidebar-header">
-        <input type="text" id="search-box" placeholder="🔎 Dosya ara (örn: gman)...">
+<div class="sidebar">
+    <div style="display:flex;">
+        <div class="nav-tab active" onclick="switchTab('audio')">Ses</div>
+        <div class="nav-tab" onclick="switchTab('titles')">Titles</div>
+        <div class="nav-tab" onclick="switchTab('sentences')">Sentences</div>
     </div>
-    <div id="sidebar-list-container" style="flex:1; overflow-y:auto; padding: 15px;"></div>
-    <button id="btn-load-more" class="btn" style="display:none; background:#3d3d4a; margin: 15px; width: auto;">Daha Fazla Yükle...</button>
+    <div style="padding: 10px;">
+        <input type="text" id="search-box" placeholder="🔎 Ara...">
+    </div>
+    <div id="sidebar-list-container" style="flex:1; overflow-y:auto; padding: 10px;"></div>
+    <button id="btn-load-more" class="btn" style="display:none; background:#3d3d4a;">Daha Fazla...</button>
 </div>
 
-<div id="main-area">
-    <h2 id="current-file" style="color: #ff9f43; margin-bottom: 20px;">Dosya seçilmedi</h2>
-    <button id="btn-start" class="btn recorder-btn" style="background:#ee5253; color:white;" disabled>🎙️ Kayda Başla</button>
-    <button id="btn-stop" class="btn recorder-btn" style="background:#10ac84; color:white; display:none;">🛑 Kaydı Bitir</button>
+<div class="main-area">
+    <h2 id="current-title">Dosya Seçin</h2>
+    <textarea id="editor" style="flex:1; background:#18181f; color:#fff; border:none; padding:15px; display:none;"></textarea>
+    <div id="audio-controls" style="text-align:center;">
+        <button id="btn-start" class="btn" style="background:#ee5253; height: 100px;">🎙️ KAYDA BAŞLA</button>
+        <button id="btn-stop" class="btn" style="background:#10ac84; height: 100px; display:none;">🛑 BİTİR</button>
+    </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
