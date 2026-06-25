@@ -1,241 +1,212 @@
 let allFiles = []; 
-let zipData = {};       // Eski ZIP'ten gelenler
-let newlyRecorded = {}; // Bu oturumda yeni kaydedilenler
+let zipStorage = {};       // Eski ZIP verileri
+let sessionStorage = {};   // Bu oturumda kaydedilenler
 let renderedCount = 0;
-const RECORD_LIMIT = 50;
 
-// 1. Orijinal Klasör Yükleme
+const clean = (p) => p ? p.replace(/\\/g, '/').toLowerCase() : '';
+
+// --- AKILLI YOL EŞLEŞTİRİCİ (Fuzzy Matcher) ---
+// Tarayıcıdaki yol ile ZIP içindeki yolun başındaki klasör isimleri farklı olsa bile eşleştirir.
+function getStorageMatch(path) {
+    const target = clean(path);
+    for (let k in sessionStorage) { if (target.endsWith(k) || k.endsWith(target)) return { type: 'new', blob: sessionStorage[k], key: k }; }
+    for (let k in zipStorage) { if (target.endsWith(k) || k.endsWith(target)) return { type: 'zip', blob: zipStorage[k], key: k }; }
+    return null;
+}
+
+// 1. Orijinal Klasörü Yükle
 document.getElementById('f-input').onchange = (e) => {
-    const files = Array.from(e.target.files);
-    allFiles = files.filter(f => f.name.toLowerCase().endsWith('.wav'))
-        .map(f => ({
-            name: f.name,
-            path: f.webkitRelativePath, // "sound/weapons/glock.wav" vb.
-            fileObj: f
-        }));
+    allFiles = Array.from(e.target.files)
+        .filter(f => f.name.toLowerCase().endsWith('.wav'))
+        .map(f => ({ name: f.name, path: f.webkitRelativePath, file: f }));
     
     if(allFiles.length > 0) {
-        document.getElementById('export-ui').style.display = 'block';
-        alert(`${allFiles.length} adet ses dosyası başarıyla tarandı.`);
+        document.getElementById('export-box').style.display = 'block';
+        renderList(true);
     }
-    render(true);
 };
 
-// 2. ZIP Yükleme
+// 2. Eski ZIP'i Yükle
 document.getElementById('z-input').onchange = async (e) => {
-    if (allFiles.length === 0) {
-        alert("HATA: Lütfen önce 1. Adımdaki 'Orijinal Klasörü' yükleyin!");
-        e.target.value = ''; return;
-    }
+    if(allFiles.length === 0) return alert("Lütfen önce 1. Butondan Orijinal Klasörü seçin!");
     const zip = await JSZip.loadAsync(e.target.files[0]);
-    for(let path in zip.files) {
-        if (!zip.files[path].dir && path.toLowerCase().endsWith('.wav')) {
-            zipData[path] = await zip.files[path].async("blob");
+    let count = 0;
+    for(let p in zip.files) {
+        if(!zip.files[p].dir && p.toLowerCase().endsWith('.wav')) {
+            zipStorage[clean(p)] = await zip.files[p].async("blob");
+            count++;
         }
     }
-    render(true);
-    alert("ZIP dosyası aktarıldı. Dosyalar 'ZATEN VAR (ZIP)' olarak işaretlendi.");
+    alert(`${count} adet ses ZIP içerisinden projeye tanındı.`);
+    renderList(true);
 };
 
-// 3. Arama ve Listeleme (100'er 100'er yükler, kasmayı engeller)
-function render(reset) {
-    const list = document.getElementById('list');
-    const search = document.getElementById('search').value.toLowerCase();
-    if(reset) { list.innerHTML = ''; renderedCount = 0; }
-    
-    const filtered = allFiles.filter(f => f.path.toLowerCase().includes(search));
+// 3. Sıfırlama (İstediğin Google tarayıcı mesajı tam olarak bu)
+function triggerReset() {
+    if(confirm("Yeni bir proje başlatmak için sayfa yenilensin mi? (Kaydedilmemiş tüm sesler silinir)")) {
+        window.location.reload();
+    }
+}
+
+// 4. Liste Render (100'erli kasmayan sistem)
+function renderList(reset = false) {
+    const listEl = document.getElementById('list');
+    const q = clean(document.getElementById('search').value);
+    if(reset) { listEl.innerHTML = ''; renderedCount = 0; }
+
+    const filtered = allFiles.filter(f => clean(f.path).includes(q));
     const batch = filtered.slice(renderedCount, renderedCount + 100);
-    
+
     batch.forEach(f => {
         const div = document.createElement('div');
         div.className = 'file-item';
         
-        let statusHtml = '';
-        if (newlyRecorded[f.path]) {
-            statusHtml = `<span class="status-badge badge-new">✅ YENİ KAYDEDİLDİ</span>`;
-        } else if (zipData[f.path]) {
-            statusHtml = `<span class="status-badge badge-zip">📦 ZATEN VAR (ZIP)</span>`;
-        }
+        const match = getStorageMatch(f.path);
+        let badge = '';
+        if(match?.type === 'new') badge = `<span class="badge b-new">YENİ KAYDEDİLDİ</span>`;
+        else if(match?.type === 'zip') badge = `<span class="badge b-zip">ÖNCEDEN KAYDEDİLDİ</span>`;
 
-        div.innerHTML = `<div>${f.name}</div>${statusHtml}`;
-        div.onclick = () => selectFile(f, div);
-        list.appendChild(div);
+        div.innerHTML = `<div><b>${f.name}</b></div>${badge}`;
+        div.onclick = () => selectFile(f);
+        listEl.appendChild(div);
     });
+
     renderedCount += 100;
     document.getElementById('btn-load-more').style.display = (renderedCount < filtered.length) ? 'block' : 'none';
 }
 
-// 4. Dosya Seçimi ve Oynatıcılar
-let currentFile = null;
-function selectFile(f, divElement) {
-    currentFile = f;
+// 5. Dosya Seçimi & Çift Oynatıcı
+let activeFile = null;
+function selectFile(f) {
+    activeFile = f;
     document.getElementById('fname').innerText = f.name;
     document.getElementById('fpath').innerText = f.path;
-    document.getElementById('audio-players').style.display = 'flex';
-    document.getElementById('recorder-ui').style.display = 'block';
+    document.getElementById('player-container').style.display = 'grid';
+    document.getElementById('recorder-box').style.display = 'block';
 
-    // Seçili dosyayı belirginleştir
-    document.querySelectorAll('.file-item').forEach(el => el.style.borderLeft = 'none');
-    divElement.style.borderLeft = '3px solid var(--primary)';
+    // Orijinal ses
+    document.getElementById('p-orig').src = URL.createObjectURL(f.file);
 
-    // 1. Orijinal Sesi oynatıcıya yükle
-    document.getElementById('audio-original').src = URL.createObjectURL(f.fileObj);
-    
-    // 2. Varsa kendi sesini yükle (Öncelik yeni kaydın, sonra zip'in)
-    const recordedBlob = newlyRecorded[f.path] || zipData[f.path];
-    const recAudio = document.getElementById('audio-recorded');
-    if (recordedBlob) {
-        recAudio.src = URL.createObjectURL(recordedBlob);
+    // Kayıtlı ses var mı kontrolü
+    const match = getStorageMatch(f.path);
+    const recPlayer = document.getElementById('p-rec');
+    const recCard = document.getElementById('rec-card');
+
+    if(match) {
+        recPlayer.src = URL.createObjectURL(match.blob);
+        recCard.style.opacity = '1';
     } else {
-        recAudio.src = ''; // Kayıt yoksa boşalt
+        recPlayer.src = '';
+        recCard.style.opacity = '0.25'; // Ses yoksa kutu sönük dursun
     }
 }
 
-// 5. Ses Kaydetme Mantığı (Toggle, Hold, Delay)
-let mediaRecorder;
-let audioChunks = [];
-let isRecording = false;
-let countdownTimer;
+// 6. Kayıt Motoru (Üzerine Yazma Onayı & Hold/Toggle Mekanizması)
+let mediaRecorder, chunks = [], isRecording = false;
+let sessionApprovedOverwritePath = null; // Hold modunda mouse'u bıraktığında onayı unutmaması için
 
 const recBtn = document.getElementById('record-btn');
-const recStatus = document.getElementById('rec-status');
+const modeEl = document.getElementById('rec-mode');
 
-// A: Gecikme Sayacı ile Başlatma
-async function triggerStart() {
-    const delay = parseInt(document.getElementById('rec-delay').value);
-    if(delay > 0) {
-        let timeLeft = delay;
-        recBtn.innerText = `⏳ ${timeLeft}...`;
-        recBtn.style.background = '#f39c12';
-        recStatus.innerText = "Kayıt hazırlanıyor...";
-        
-        countdownTimer = setInterval(() => {
-            timeLeft--;
-            if(timeLeft > 0) {
-                recBtn.innerText = `⏳ ${timeLeft}...`;
+modeEl.onchange = () => {
+    document.getElementById('rec-hint').innerText = modeEl.value === 'hold' 
+        ? "Kaydetmek için butona basılı tutun." : "Başlatmak için tıklayın, bitirmek için tekrar tıklayın.";
+};
+
+function tryTriggerRecord() {
+    if(!activeFile) return;
+    const existing = getStorageMatch(activeFile.path);
+
+    // EĞER SES ZATEN VARSA VE BU DOSYA İÇİN DAHA ÖNCE ONAY VERMEDİYSEK:
+    if(existing && sessionApprovedOverwritePath !== activeFile.path) {
+        if(confirm(`"${activeFile.name}" dosyasının zaten bir kaydı var. Üzerine yazmak istiyor musunuz?`)) {
+            sessionApprovedOverwritePath = activeFile.path;
+            if(modeEl.value === 'hold') {
+                alert("Üzerine yazma onaylandı. Şimdi butona basılı tutarak kaydınızı yapabilirsiniz.");
+                return; // Basılı tutacağı bir sonraki hamleyi bekler
             } else {
-                clearInterval(countdownTimer);
-                startMic();
+                startMic(); return; // Toggle modunda direkt başlar
             }
-        }, 1000);
-    } else {
-        startMic();
+        } else {
+            return; // İptal bastı
+        }
     }
+    startMic();
 }
 
-// B: Mikrofonu Aç ve Kayda Başla
 async function startMic() {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+        const stream = await navigator.mediaDevices.getUserMedia({audio:true});
         mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-        
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        mediaRecorder.onstop = () => processRecording();
+        chunks = [];
+        mediaRecorder.ondataavailable = e => chunks.push(e.data);
+        mediaRecorder.onstop = () => saveRecording();
         
         mediaRecorder.start();
         isRecording = true;
-        recBtn.innerText = "🛑 KAYDI BİTİR";
-        recBtn.style.background = "var(--success)";
-        recStatus.innerText = "🔴 Şu an kaydediliyor... Konuşun!";
-    } catch (err) {
-        alert("Mikrofon izni reddedildi veya mikrofon bulunamadı!");
-        resetBtnUI();
-    }
+        recBtn.innerText = "🔴 KAYDEDİLİYOR... (BİTİR)";
+        recBtn.style.background = "var(--green)";
+        recBtn.style.color = "#000";
+    } catch(err) { alert("Mikrofon izni alınamadı!"); }
 }
 
-// C: Kaydı Durdurma
 function stopMic() {
-    if(countdownTimer) clearInterval(countdownTimer);
-    if(mediaRecorder && mediaRecorder.state === "recording") {
+    if(mediaRecorder && isRecording) {
         mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach(t => t.stop()); // Mikrofon ışığını söndür
+        mediaRecorder.stream.getTracks().forEach(t => t.stop()); // Mikrofonu donanımsal kapat
     }
     isRecording = false;
-    resetBtnUI();
+    recBtn.innerText = "🎙️ KAYDA BAŞLA";
+    recBtn.style.background = "var(--red)";
+    recBtn.style.color = "#fff";
 }
 
-function resetBtnUI() {
-    recBtn.innerText = "🎙️ KAYDET";
-    recBtn.style.background = "var(--danger)";
-    recStatus.innerText = "Kaydetmek için butona basın.";
-}
-
-// D: Kaydı İşleme ve Hafızaya Alma
-function processRecording() {
-    if (!currentFile) return;
-    const blob = new Blob(audioChunks, { type: 'audio/wav' });
-    newlyRecorded[currentFile.path] = blob; // Dosyayı ORİJİNAL YOLU ile kaydet (klasörü otomatik anlar)
+function saveRecording() {
+    const blob = new Blob(chunks, {type: 'audio/wav'});
+    const cleanP = clean(activeFile.path);
     
-    // Kayıt oynatıcıyı güncelle
-    document.getElementById('audio-recorded').src = URL.createObjectURL(blob);
-    render(true); // Listeyi güncelle (Yeşil etiket çıksın)
-    checkLimit();
+    sessionStorage[cleanP] = blob;
+    sessionApprovedOverwritePath = null; // Sıfırla ki bir sonraki denemesinde tekrar sorsun
+
+    document.getElementById('p-rec').src = URL.createObjectURL(blob);
+    document.getElementById('rec-card').style.opacity = '1';
+    renderList(true); // Yan listede "YENİ KAYDEDİLDİ" yazısı belirsin
+
+    if(Object.keys(sessionStorage).length >= 50) {
+        alert("⚠️ 50 Ses limitine ulaştınız. Tarayıcı şişmesin diye lütfen ZIP indirip yedekleyin.");
+    }
 }
 
-// Buton Olayları (Mouse Down / Up / Click)
-recBtn.onmousedown = () => { if(document.getElementById('rec-mode').value === 'hold') triggerStart(); };
-recBtn.onmouseup = () => { if(document.getElementById('rec-mode').value === 'hold') stopMic(); };
-recBtn.onmouseleave = () => { if(document.getElementById('rec-mode').value === 'hold' && isRecording) stopMic(); };
-
+// Fare Kontrolleri
+recBtn.onmousedown = () => { if(modeEl.value === 'hold') tryTriggerRecord(); };
+recBtn.onmouseup = () => { if(modeEl.value === 'hold' && isRecording) stopMic(); };
+recBtn.onmouseleave = () => { if(modeEl.value === 'hold' && isRecording) stopMic(); };
 recBtn.onclick = () => {
-    if(document.getElementById('rec-mode').value === 'toggle') {
-        if(!isRecording) triggerStart();
-        else stopMic();
+    if(modeEl.value === 'toggle') {
+        if(!isRecording) tryTriggerRecord(); else stopMic();
     }
 };
 
-// 6. İndirme (ZIP Oluşturma ve Klasörleme Mantığı)
-async function downloadZip(type) {
-    if (Object.keys(newlyRecorded).length === 0 && type === 'new') {
-        return alert("Henüz hiç yeni ses kaydetmediniz!");
-    }
+// 7. Çıktı Alma (Klasör Yapısını Koruyarak ZIP Üzerine Yazma)
+async function exportMod(type) {
+    if(Object.keys(sessionStorage).length === 0 && type === 'new') return alert("Hiç yeni ses kaydetmediniz!");
     
     const zip = new JSZip();
     
-    // Seçenek 1: Her şeyi birleştir (Eski ZIP verileri + Yeni Kayıtlar ÜZERİNE YAZAR)
-    if (type === 'merge') {
-        for(let path in zipData) zip.file(path, zipData[path]); 
-        for(let path in newlyRecorded) zip.file(path, newlyRecorded[path]); // Klasör yoksa JSZip otomatik oluşturur.
-    } 
-    // Seçenek 2: Sadece Yeni Kayıtlar
-    else if (type === 'new') {
-        for(let path in newlyRecorded) zip.file(path, newlyRecorded[path]);
+    if(type === 'merge') {
+        for(let k in zipStorage) zip.file(k, zipStorage[k]);
+        for(let k in sessionStorage) zip.file(k, sessionStorage[k]); // Klasör yoksa JSZip açar, varsa üstüne yazar.
+    } else {
+        for(let k in sessionStorage) zip.file(k, sessionStorage[k]);
     }
 
-    recStatus.innerText = "ZIP hazırlanıyor, lütfen bekleyin...";
-    const blob = await zip.generateAsync({type:"blob"});
-    const a = document.createElement('a'); 
-    a.href = URL.createObjectURL(blob); 
-    a.download = (type === 'merge') ? "Tum_Mod_Sesleri.zip" : "Yeni_Eklenen_Sesler.zip"; 
+    const content = await zip.generateAsync({type:"blob"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(content);
+    a.download = type === 'merge' ? "HalfLife_Tam_Ses_Modu.zip" : "Yeni_Kayitlar_Yama.zip";
     a.click();
-    recStatus.innerText = "ZIP indirildi!";
 }
 
-// 7. Limit Koruması
-function checkLimit() {
-    const currentCount = Object.keys(newlyRecorded).length;
-    if(currentCount >= RECORD_LIMIT) {
-        alert(`⚠️ LİMİTE ULAŞTINIZ! (${RECORD_LIMIT} Yeni Kayıt)\nTarayıcı belleğinin dolmasını ve çökmesini engellemek için lütfen:\n1. 'SADECE Yeni Eklenenleri İndir' butonuna basıp ZIP'i alın.\n2. Sağ tıklayıp önceki mod ZIP'inizin içine atın (veya 1. seçenekle hepsini birleşik indirin).\n3. 'Yeni Proje Başlat' diyerek sıfırlayıp devam edin.`);
-    }
-}
-
-// 8. Yeni Proje (Her şeyi sıfırlama)
-function startNewProject() {
-    if(confirm("Tüm kaydedilmemiş veriler silinecek! Yeni bir projeye başlamak istediğinize emin misiniz?")) {
-        zipData = {};
-        newlyRecorded = {};
-        allFiles = [];
-        document.getElementById('list').innerHTML = '';
-        document.getElementById('audio-players').style.display = 'none';
-        document.getElementById('recorder-ui').style.display = 'none';
-        document.getElementById('export-ui').style.display = 'none';
-        document.getElementById('fname').innerText = "Sıfırlandı. Orijinal Klasörü Seçin.";
-        document.getElementById('fpath').innerText = "";
-    }
-}
-
-// Event Listeners
-document.getElementById('search').oninput = () => render(true);
-document.getElementById('btn-load-more').onclick = () => render(false);
-window.onbeforeunload = () => (Object.keys(newlyRecorded).length > 0) ? true : null;
+document.getElementById('search').oninput = () => renderList(true);
+document.getElementById('btn-load-more').onclick = () => renderList(false);
+window.onbeforeunload = () => Object.keys(sessionStorage).length > 0 ? true : null;
